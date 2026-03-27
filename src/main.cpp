@@ -59,17 +59,28 @@ void showMenu() {
     cout << "Enter choice: ";
 }
 
+void waitForEnter() {
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cout << "Press Enter to return to the menu...";
+    cin.get();
+}
+
 void showProgramInfo() {
     cout << "\n";
     printLine();
     cout << "Program Info\n";
     printLine();
     cout << "AutoFit is a C++ car recommendation tool that helps users\n";
-    cout << "find vehicles based on budget and preferences.\n";
-    cout << "It loads a CSV dataset, stores cars in a red-black tree\n";
-    cout << "by price, filters within the user's budget range, and\n";
-    cout << "ranks matches using a weighted scoring system.\n";
+    cout << "find vehicles based on budget and preferences.\n\n";
+    cout << "How it works:\n";
+    cout << "  1. Loads a car dataset from CSV\n";
+    cout << "  2. Stores car records in a red-black tree using price as the key\n";
+    cout << "  3. Filters cars within the user's budget range\n";
+    cout << "  4. Ranks cars using a weighted scoring system\n";
+    cout << "  5. Displays the top matches in a formatted table\n";
     printLine();
+    cout << "\n";
+    waitForEnter();
 }
 
 double getValidDouble(const string& prompt) {
@@ -162,13 +173,8 @@ int scoreCarWeighted(const Car& c, const UserPreferences& p) {
         score += 25;
     }
 
-    // lower price is better
     score += static_cast<int>((50000 - c.price) / 1000.0 * p.priceWeight);
-
-    // newer year is better
     score += (c.year - 2000) * p.yearWeight;
-
-    // more horsepower is better
     score += (c.horsepower / 25) * p.horsepowerWeight;
 
     return score;
@@ -185,38 +191,50 @@ void printResultsTable(vector<Car>& results, const UserPreferences& p) {
     printLine();
     cout << "AutoFit ranked cars using your answers and weighted scoring\n\n";
 
+    cout << "Selected Filters:\n";
+    cout << "  Budget: $" << fixed << setprecision(2) << p.minPrice
+         << " - $" << p.maxPrice << "\n";
+    cout << "  Fuel: " << p.fuel
+         << " | Transmission: " << p.transmission
+         << " | Drivetrain: " << p.drivetrain
+         << " | Brand: " << p.brand << "\n";
+    cout << "  Weights -> Price: " << p.priceWeight
+         << ", Year: " << p.yearWeight
+         << ", Horsepower: " << p.horsepowerWeight
+         << ", Fuel Match: " << p.fuelWeight << "\n\n";
+
     cout << left
          << setw(6)  << "Rank"
          << setw(12) << "Make"
          << setw(16) << "Model"
          << setw(8)  << "Year"
-         << setw(12) << "Price"
+         << setw(13) << "Price"
          << setw(10) << "Fuel"
          << setw(14) << "Trans."
          << setw(10) << "Drive"
-         << setw(10) << "Score" << "\n";
+         << setw(8)  << "Score" << "\n";
 
     cout << "--------------------------------------------------------------------------------\n";
 
     int count = min((int)results.size(), p.topN);
     for (int i = 0; i < count; i++) {
         const Car& c = results[i];
+        string priceText = "$" + to_string((int)c.price);
 
         cout << left
              << setw(6)  << (i + 1)
              << setw(12) << c.make
              << setw(16) << c.model
-             << setw(8)  << c.year;
-
-        cout << "$" << setw(11) << fixed << setprecision(2) << c.price
+             << setw(8)  << c.year
+             << setw(13) << priceText
              << setw(10) << c.fuel
              << setw(14) << c.transmission
              << setw(10) << c.drivetrain
-             << setw(10) << scoreCarWeighted(c, p)
+             << setw(8)  << scoreCarWeighted(c, p)
              << "\n";
     }
 
-    cout << "\n";
+    cout << "\nTop matches were ranked by preference match, price, year, and horsepower.\n\n";
 }
 
 void runSearch(RBTree& tree) {
@@ -226,10 +244,14 @@ void runSearch(RBTree& tree) {
 
     if (results.empty()) {
         cout << "\nNo cars found in that budget range.\n";
+        cout << "Try lowering your minimum budget, increasing your maximum budget,\n";
+        cout << "or choosing broader preferences.\n\n";
+        waitForEnter();
         return;
     }
 
     printResultsTable(results, prefs);
+    waitForEnter();
 }
 
 int getMenuChoice() {
