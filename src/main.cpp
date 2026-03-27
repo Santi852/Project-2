@@ -10,9 +10,7 @@
 using namespace std;
 
 string toLowerCase(string s) {
-    for (char& ch : s) {
-        ch = tolower(ch);
-    }
+    for (char& ch : s) ch = tolower(ch);
     return s;
 }
 
@@ -25,7 +23,7 @@ string normalizeFuel(string s) {
 
 string normalizeTransmission(string s) {
     s = toLowerCase(s);
-    if (s == "automatic") return "Automatic";
+    if (s == "automatic" || s == "auto") return "Automatic";
     if (s == "manual") return "Manual";
     return s;
 }
@@ -39,24 +37,6 @@ string normalizeDrivetrain(string s) {
     return s;
 }
 
-int scoreCar(const Car& c, const string& prefFuel, const string& prefTransmission, const string& prefDrivetrain) {
-    int score = 0;
-
-    if (c.fuel == prefFuel)
-        score += 30;
-
-    if (c.transmission == prefTransmission)
-        score += 20;
-
-    if (c.drivetrain == prefDrivetrain)
-        score += 20;
-
-    score += (c.year - 2000);
-    score += c.horsepower / 20;
-
-    return score;
-}
-
 void printLine() {
     cout << "============================================================\n";
 }
@@ -65,7 +45,30 @@ void printBanner() {
     printLine();
     cout << "                 AutoFit Car Recommendation Tool\n";
     printLine();
-    cout << "Find the best car for your needs based on your preferences.\n";
+    cout << "Answer the questionnaire and get your best car matches.\n";
+    printLine();
+}
+
+void showMenu() {
+    cout << "\n";
+    printLine();
+    cout << "1. Start Car Search\n";
+    cout << "2. Show Program Info\n";
+    cout << "3. Exit\n";
+    printLine();
+    cout << "Enter choice: ";
+}
+
+void showProgramInfo() {
+    cout << "\n";
+    printLine();
+    cout << "Program Info\n";
+    printLine();
+    cout << "AutoFit is a C++ car recommendation tool that helps users\n";
+    cout << "find vehicles based on budget and preferences.\n";
+    cout << "It loads a CSV dataset, stores cars in a red-black tree\n";
+    cout << "by price, filters within the user's budget range, and\n";
+    cout << "ranks matches using a weighted scoring system.\n";
     printLine();
 }
 
@@ -74,7 +77,6 @@ double getValidDouble(const string& prompt) {
     while (true) {
         cout << prompt;
         cin >> value;
-
         if (cin.fail() || value < 0) {
             cout << "Invalid input. Please enter a valid positive number.\n";
             cin.clear();
@@ -85,24 +87,153 @@ double getValidDouble(const string& prompt) {
     }
 }
 
-string getValidString(const string& prompt) {
+int getValidInt(const string& prompt, int minVal, int maxVal) {
+    int value;
+    while (true) {
+        cout << prompt;
+        cin >> value;
+        if (cin.fail() || value < minVal || value > maxVal) {
+            cout << "Invalid input. Please enter a value between "
+                 << minVal << " and " << maxVal << ".\n";
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        } else {
+            return value;
+        }
+    }
+}
+
+string getWordInput(const string& prompt) {
     string value;
     cout << prompt;
     cin >> value;
     return value;
 }
 
-void printCarCard(const Car& c, int rank, int score) {
-    cout << rank << ". " << c.year << " " << c.make << " " << c.model << "\n";
-    cout << "   Price: $" << fixed << setprecision(2) << c.price << "\n";
-    cout << "   Fuel: " << c.fuel
-         << " | Transmission: " << c.transmission
-         << " | Drivetrain: " << c.drivetrain << "\n";
-    cout << "   Horsepower: " << c.horsepower
-         << " | Color: " << c.color
-         << " | Engine: " << c.engine << "\n";
-    cout << "   Match Score: " << score << "\n";
-    cout << "------------------------------------------------------------\n";
+struct UserPreferences {
+    double minPrice;
+    double maxPrice;
+    int topN;
+    string fuel;
+    string transmission;
+    string drivetrain;
+    string brand;
+    int priceWeight;
+    int yearWeight;
+    int horsepowerWeight;
+    int fuelWeight;
+};
+
+UserPreferences collectPreferences() {
+    UserPreferences p;
+
+    cout << "\n[ Budget & Usage ]\n";
+    p.minPrice = getValidDouble("Budget min ($): ");
+    p.maxPrice = getValidDouble("Budget max ($): ");
+    while (p.maxPrice < p.minPrice) {
+        cout << "Maximum budget cannot be less than minimum budget.\n";
+        p.maxPrice = getValidDouble("Re-enter budget max ($): ");
+    }
+    p.topN = getValidInt("Number of results (Top N): ", 1, 10);
+
+    cout << "\n[ Lifestyle ]\n";
+    p.fuel = normalizeFuel(getWordInput("Fuel preference (Gas/Electric): "));
+    p.transmission = normalizeTransmission(getWordInput("Preferred transmission (Automatic/Manual): "));
+    p.drivetrain = normalizeDrivetrain(getWordInput("Preferred drivetrain (FWD/RWD/AWD/4WD): "));
+    p.brand = getWordInput("Preferred brand (or Any): ");
+
+    cout << "\n[ Preferences ]\n";
+    p.priceWeight = getValidInt("Low price importance (1-10): ", 1, 10);
+    p.yearWeight = getValidInt("Newer year importance (1-10): ", 1, 10);
+    p.horsepowerWeight = getValidInt("Horsepower importance (1-10): ", 1, 10);
+    p.fuelWeight = getValidInt("Fuel match importance (1-10): ", 1, 10);
+
+    return p;
+}
+
+int scoreCarWeighted(const Car& c, const UserPreferences& p) {
+    int score = 0;
+
+    if (c.fuel == p.fuel) score += 10 * p.fuelWeight;
+    if (c.transmission == p.transmission) score += 20;
+    if (c.drivetrain == p.drivetrain) score += 20;
+
+    if (toLowerCase(p.brand) != "any" && toLowerCase(c.make) == toLowerCase(p.brand)) {
+        score += 25;
+    }
+
+    // lower price is better
+    score += static_cast<int>((50000 - c.price) / 1000.0 * p.priceWeight);
+
+    // newer year is better
+    score += (c.year - 2000) * p.yearWeight;
+
+    // more horsepower is better
+    score += (c.horsepower / 25) * p.horsepowerWeight;
+
+    return score;
+}
+
+void printResultsTable(vector<Car>& results, const UserPreferences& p) {
+    sort(results.begin(), results.end(), [&](const Car& a, const Car& b) {
+        return scoreCarWeighted(a, p) > scoreCarWeighted(b, p);
+    });
+
+    cout << "\n";
+    printLine();
+    cout << "YOUR TOP MATCHES\n";
+    printLine();
+    cout << "AutoFit ranked cars using your answers and weighted scoring\n\n";
+
+    cout << left
+         << setw(6)  << "Rank"
+         << setw(12) << "Make"
+         << setw(16) << "Model"
+         << setw(8)  << "Year"
+         << setw(12) << "Price"
+         << setw(10) << "Fuel"
+         << setw(14) << "Trans."
+         << setw(10) << "Drive"
+         << setw(10) << "Score" << "\n";
+
+    cout << "--------------------------------------------------------------------------------\n";
+
+    int count = min((int)results.size(), p.topN);
+    for (int i = 0; i < count; i++) {
+        const Car& c = results[i];
+
+        cout << left
+             << setw(6)  << (i + 1)
+             << setw(12) << c.make
+             << setw(16) << c.model
+             << setw(8)  << c.year;
+
+        cout << "$" << setw(11) << fixed << setprecision(2) << c.price
+             << setw(10) << c.fuel
+             << setw(14) << c.transmission
+             << setw(10) << c.drivetrain
+             << setw(10) << scoreCarWeighted(c, p)
+             << "\n";
+    }
+
+    cout << "\n";
+}
+
+void runSearch(RBTree& tree) {
+    UserPreferences prefs = collectPreferences();
+
+    vector<Car> results = tree.rangeSearch(prefs.minPrice, prefs.maxPrice);
+
+    if (results.empty()) {
+        cout << "\nNo cars found in that budget range.\n";
+        return;
+    }
+
+    printResultsTable(results, prefs);
+}
+
+int getMenuChoice() {
+    return getValidInt("", 1, 3);
 }
 
 int main() {
@@ -117,56 +248,21 @@ int main() {
         tree.insert(c);
     }
 
-    cout << "Done! " << cars.size() << " cars loaded successfully.\n\n";
+    cout << "Done! " << cars.size() << " cars loaded successfully.\n";
 
-    double minPrice = getValidDouble("Enter minimum budget ($): ");
-    double maxPrice = getValidDouble("Enter maximum budget ($): ");
+    while (true) {
+        showMenu();
+        int choice = getMenuChoice();
 
-    while (maxPrice < minPrice) {
-        cout << "Maximum budget cannot be less than minimum budget.\n";
-        maxPrice = getValidDouble("Re-enter maximum budget ($): ");
+        if (choice == 1) {
+            runSearch(tree);
+        } else if (choice == 2) {
+            showProgramInfo();
+        } else {
+            cout << "\nThank you for using AutoFit!\n";
+            break;
+        }
     }
 
-    cout << "\nChoose your preferences below.\n";
-    printLine();
-
-    string prefFuel = normalizeFuel(
-        getValidString("Fuel preference (Gas/Electric): ")
-    );
-
-    string prefTransmission = normalizeTransmission(
-        getValidString("Transmission preference (Automatic/Manual): ")
-    );
-
-    string prefDrivetrain = normalizeDrivetrain(
-        getValidString("Drivetrain preference (FWD/RWD/AWD/4WD): ")
-    );
-
-    vector<Car> results = tree.rangeSearch(minPrice, maxPrice);
-
-    if (results.empty()) {
-        cout << "\nNo cars found in that price range.\n";
-        return 0;
-    }
-
-    sort(results.begin(), results.end(), [&](const Car& a, const Car& b) {
-        return scoreCar(a, prefFuel, prefTransmission, prefDrivetrain) >
-               scoreCar(b, prefFuel, prefTransmission, prefDrivetrain);
-    });
-
-    cout << "\n";
-    printLine();
-    cout << "Top 5 Recommended Cars in Your Budget\n";
-    cout << "Budget Range: $" << fixed << setprecision(2) << minPrice
-         << " - $" << maxPrice << "\n";
-    printLine();
-
-    int count = min((int)results.size(), 5);
-    for (int i = 0; i < count; i++) {
-        int score = scoreCar(results[i], prefFuel, prefTransmission, prefDrivetrain);
-        printCarCard(results[i], i + 1, score);
-    }
-
-    cout << "Thank you for using AutoFit!\n";
     return 0;
 }
