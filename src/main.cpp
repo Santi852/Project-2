@@ -109,7 +109,7 @@ int main() {
     printBanner();
 
     cout << "Loading dataset...\n";
-    vector<Car> cars = loadCSV("cars_100k_final.csv");
+    vector<Car> cars = loadCSV("src/cars_100k_final.csv");
 
     cout << "Building red-black tree...\n";
     RBTree tree;
