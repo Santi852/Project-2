@@ -4,6 +4,7 @@
 #include <limits>
 #include <string>
 #include <cctype>
+#include <fstream>
 #include "CSVLoader.h"
 #include "RBTree.h"
 
@@ -70,14 +71,35 @@ void showProgramInfo() {
     printLine();
     cout << "Program Info\n";
     printLine();
-    cout << "AutoFit is a C++ car recommendation tool that helps users\n";
-    cout << "find vehicles based on budget and preferences.\n\n";
-    cout << "How it works:\n";
-    cout << "  1. Loads a car dataset from CSV\n";
-    cout << "  2. Stores car records in a red-black tree using price as the key\n";
-    cout << "  3. Filters cars within the user's budget range\n";
-    cout << "  4. Ranks cars using a weighted scoring system\n";
-    cout << "  5. Displays the top matches in a formatted table\n";
+
+    cout << "About AutoFit\n";
+    cout << "AutoFit is a C++ vehicle recommendation application that helps\n";
+    cout << "users identify cars that align with their budget, drivetrain,\n";
+    cout << "fuel preference, transmission preference, and ranking priorities.\n\n";
+
+    cout << "Core Capabilities\n";
+    cout << "  - Loads and processes a large vehicle inventory dataset\n";
+    cout << "  - Supports budget-based filtering through efficient search\n";
+    cout << "  - Applies weighted recommendation scoring\n";
+    cout << "  - Displays top matches in a structured results table\n";
+    cout << "  - Exports recommendation results to CSV\n\n";
+
+    cout << "Recommendation Engine\n";
+    cout << "AutoFit combines range-based filtering with weighted scoring\n";
+    cout << "to narrow a large inventory into a smaller set of high-quality\n";
+    cout << "recommendations tailored to the user's inputs.\n\n";
+
+    cout << "System Architecture\n";
+    cout << "  - Programming Language: C++\n";
+    cout << "  - Data Source: CSV vehicle inventory\n";
+    cout << "  - Search Structure: Red-Black Tree organized by price\n";
+    cout << "  - Scoring Model: Preference-driven weighted ranking\n\n";
+
+    cout << "Technical Context\n";
+    cout << "This project also examines tree-based data structures as part\n";
+    cout << "of the system design to support efficient search behavior on\n";
+    cout << "large datasets.\n";
+
     printLine();
     cout << "\n";
     waitForEnter();
@@ -180,11 +202,13 @@ int scoreCarWeighted(const Car& c, const UserPreferences& p) {
     return score;
 }
 
-void printResultsTable(vector<Car>& results, const UserPreferences& p) {
+void sortResults(vector<Car>& results, const UserPreferences& p) {
     sort(results.begin(), results.end(), [&](const Car& a, const Car& b) {
         return scoreCarWeighted(a, p) > scoreCarWeighted(b, p);
     });
+}
 
+void printResultsTable(vector<Car>& results, const UserPreferences& p) {
     cout << "\n";
     printLine();
     cout << "YOUR TOP MATCHES\n";
@@ -237,6 +261,48 @@ void printResultsTable(vector<Car>& results, const UserPreferences& p) {
     cout << "\nTop matches were ranked by preference match, price, year, and horsepower.\n\n";
 }
 
+void exportResultsToCSV(const vector<Car>& results, const UserPreferences& p) {
+    ofstream outFile("autofit_results.csv");
+
+    if (!outFile.is_open()) {
+        cout << "Error: Could not create autofit_results.csv\n";
+        return;
+    }
+
+    outFile << "Rank,Make,Model,Year,Price,Fuel,Transmission,Drivetrain,Horsepower,Score\n";
+
+    int count = min((int)results.size(), p.topN);
+    for (int i = 0; i < count; i++) {
+        const Car& c = results[i];
+        outFile << (i + 1) << ","
+                << c.make << ","
+                << c.model << ","
+                << c.year << ","
+                << c.price << ","
+                << c.fuel << ","
+                << c.transmission << ","
+                << c.drivetrain << ","
+                << c.horsepower << ","
+                << scoreCarWeighted(c, p) << "\n";
+    }
+
+    outFile.close();
+    cout << "Results exported successfully to autofit_results.csv\n\n";
+}
+
+void askToExport(const vector<Car>& results, const UserPreferences& p) {
+    string choice;
+    cout << "Would you like to export these results to CSV? (y/n): ";
+    cin >> choice;
+
+    choice = toLowerCase(choice);
+    if (choice == "y" || choice == "yes") {
+        exportResultsToCSV(results, p);
+    } else {
+        cout << "Results were not exported.\n\n";
+    }
+}
+
 void runSearch(RBTree& tree) {
     UserPreferences prefs = collectPreferences();
 
@@ -250,7 +316,9 @@ void runSearch(RBTree& tree) {
         return;
     }
 
+    sortResults(results, prefs);
     printResultsTable(results, prefs);
+    askToExport(results, prefs);
     waitForEnter();
 }
 
