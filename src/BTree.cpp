@@ -8,7 +8,7 @@ BTreeNode::BTreeNode(bool isLeaf) {
 
 BTree::BTree() {
     root = nullptr; 
-    t=3; // max degree is 3
+    t=3; // min degree is 3
 }
 
 void BTree::splitChild(BTreeNode* parent, int index) {
@@ -25,7 +25,7 @@ void BTree::splitChild(BTreeNode* parent, int index) {
     }
 
     if (!y->leaf) {
-        for (int j=t; j <=(int)y->children.size(); j++) {
+        for (int j=t; j <(int)y->children.size(); j++) {
             z->children.push_back(y->children[j]); // move cpointer to new node
         }
     }
@@ -61,12 +61,13 @@ void BTree::insertNonFull(BTreeNode* node, Car c) {
 
             if (c.price >= node->keys[i]){i++;}
         }
-    }
+        
         insertNonFull(node->children[i],c);
     }
-}
+    }
 
-//
+
+
 void BTree::insert(Car c){ // insert a new car into the BTree
     if (root == nullptr){ 
         root = new BTreeNode(true);
@@ -102,7 +103,7 @@ void BTree::rangeHelper(BTreeNode* node, double low, double high, vector<Car>& r
         rangeHelper(node->children[n],low,high,result);
 }
 //search range of the price and return cars
-vector<Car> Btree::rangeSearch(double low, double high) {
+vector<Car> BTree::rangeSearch(double low, double high) {
     vector<Car> result;
     rangeHelper(root, low, high, result);
     return result;
