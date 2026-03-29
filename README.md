@@ -142,8 +142,8 @@ Search performance may vary depending on the budget range and dataset distributi
 
 GitHub Repository
 
-Add your GitHub repository link here
+https://github.com/Santi852/Project-2/tree/main
 
 Video Demo
 
-Add your YouTube video link here
+https://youtu.be/RZ2EZ0dMjZA
