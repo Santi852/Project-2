@@ -5,10 +5,13 @@
 #include <string>
 #include <cctype>
 #include <fstream>
+#include <chrono>
 #include "CSVLoader.h"
 #include "RBTree.h"
+#include "BTree.h"
 
 using namespace std;
+using namespace std::chrono;
 
 string toLowerCase(string s) {
     for (char& ch : s) ch = tolower(ch);
@@ -92,13 +95,12 @@ void showProgramInfo() {
     cout << "System Architecture\n";
     cout << "  - Programming Language: C++\n";
     cout << "  - Data Source: CSV vehicle inventory\n";
-    cout << "  - Search Structure: Red-Black Tree organized by price\n";
+    cout << "  - Search Structures: Red-Black Tree and B-Tree organized by price\n";
     cout << "  - Scoring Model: Preference-driven weighted ranking\n\n";
 
     cout << "Technical Context\n";
-    cout << "This project also examines tree-based data structures as part\n";
-    cout << "of the system design to support efficient search behavior on\n";
-    cout << "large datasets.\n";
+    cout << "This project compares tree-based data structures to evaluate\n";
+    cout << "search efficiency on large inventory datasets.\n";
 
     printLine();
     cout << "\n";
@@ -155,6 +157,13 @@ struct UserPreferences {
     int yearWeight;
     int horsepowerWeight;
     int fuelWeight;
+};
+
+struct SearchMetrics {
+    long long rbMicroseconds;
+    long long btreeMicroseconds;
+    int rbResultsCount;
+    int btreeResultsCount;
 };
 
 UserPreferences collectPreferences() {
@@ -229,7 +238,7 @@ void printResultsTable(vector<Car>& results, const UserPreferences& p) {
 
     cout << left
          << setw(6)  << "Rank"
-         << setw(12) << "Make"
+         << setw(14) << "Make"
          << setw(16) << "Model"
          << setw(8)  << "Year"
          << setw(13) << "Price"
@@ -238,7 +247,7 @@ void printResultsTable(vector<Car>& results, const UserPreferences& p) {
          << setw(10) << "Drive"
          << setw(8)  << "Score" << "\n";
 
-    cout << "--------------------------------------------------------------------------------\n";
+    cout << "--------------------------------------------------------------------------------------\n";
 
     int count = min((int)results.size(), p.topN);
     for (int i = 0; i < count; i++) {
@@ -247,7 +256,7 @@ void printResultsTable(vector<Car>& results, const UserPreferences& p) {
 
         cout << left
              << setw(6)  << (i + 1)
-             << setw(12) << c.make
+             << setw(14) << c.make
              << setw(16) << c.model
              << setw(8)  << c.year
              << setw(13) << priceText
@@ -259,6 +268,25 @@ void printResultsTable(vector<Car>& results, const UserPreferences& p) {
     }
 
     cout << "\nTop matches were ranked by preference match, price, year, and horsepower.\n\n";
+}
+
+void printSearchAnalytics(const SearchMetrics& metrics) {
+    printLine();
+    cout << "SEARCH ANALYTICS\n";
+    printLine();
+    cout << "Range Search Performance\n\n";
+    cout << "  Red-Black Tree Search Time: " << metrics.rbMicroseconds << " microseconds\n";
+    cout << "  B-Tree Search Time:         " << metrics.btreeMicroseconds << " microseconds\n";
+    cout << "  Red-Black Tree Results:     " << metrics.rbResultsCount << "\n";
+    cout << "  B-Tree Results:             " << metrics.btreeResultsCount << "\n\n";
+
+    if (metrics.rbMicroseconds < metrics.btreeMicroseconds) {
+        cout << "Observation: The Red-Black Tree completed this query faster.\n\n";
+    } else if (metrics.btreeMicroseconds < metrics.rbMicroseconds) {
+        cout << "Observation: The B-Tree completed this query faster.\n\n";
+    } else {
+        cout << "Observation: Both structures completed this query in the same measured time.\n\n";
+    }
 }
 
 void exportResultsToCSV(const vector<Car>& results, const UserPreferences& p) {
@@ -303,21 +331,43 @@ void askToExport(const vector<Car>& results, const UserPreferences& p) {
     }
 }
 
-void runSearch(RBTree& tree) {
+SearchMetrics measureSearchPerformance(RBTree& rbTree, BTree& bTree, double low, double high, vector<Car>& rbResultsOut) {
+    SearchMetrics metrics{};
+
+    auto rbStart = high_resolution_clock::now();
+    rbResultsOut = rbTree.rangeSearch(low, high);
+    auto rbEnd = high_resolution_clock::now();
+
+    auto btreeStart = high_resolution_clock::now();
+    vector<Car> btreeResults = bTree.rangeSearch(low, high);
+    auto btreeEnd = high_resolution_clock::now();
+
+    metrics.rbMicroseconds = duration_cast<microseconds>(rbEnd - rbStart).count();
+    metrics.btreeMicroseconds = duration_cast<microseconds>(btreeEnd - btreeStart).count();
+    metrics.rbResultsCount = (int)rbResultsOut.size();
+    metrics.btreeResultsCount = (int)btreeResults.size();
+
+    return metrics;
+}
+
+void runSearch(RBTree& rbTree, BTree& bTree) {
     UserPreferences prefs = collectPreferences();
 
-    vector<Car> results = tree.rangeSearch(prefs.minPrice, prefs.maxPrice);
+    vector<Car> results;
+    SearchMetrics metrics = measureSearchPerformance(rbTree, bTree, prefs.minPrice, prefs.maxPrice, results);
 
     if (results.empty()) {
         cout << "\nNo cars found in that budget range.\n";
         cout << "Try lowering your minimum budget, increasing your maximum budget,\n";
         cout << "or choosing broader preferences.\n\n";
+        printSearchAnalytics(metrics);
         waitForEnter();
         return;
     }
 
     sortResults(results, prefs);
     printResultsTable(results, prefs);
+    printSearchAnalytics(metrics);
     askToExport(results, prefs);
     waitForEnter();
 }
@@ -333,9 +383,15 @@ int main() {
     vector<Car> cars = loadCSV("src/cars_100k_final.csv");
 
     cout << "Building red-black tree...\n";
-    RBTree tree;
+    RBTree rbTree;
     for (Car& c : cars) {
-        tree.insert(c);
+        rbTree.insert(c);
+    }
+
+    cout << "Building B-tree...\n";
+    BTree bTree;
+    for (Car& c : cars) {
+        bTree.insert(c);
     }
 
     cout << "Done! " << cars.size() << " cars loaded successfully.\n";
@@ -345,7 +401,7 @@ int main() {
         int choice = getMenuChoice();
 
         if (choice == 1) {
-            runSearch(tree);
+            runSearch(rbTree, bTree);
         } else if (choice == 2) {
             showProgramInfo();
         } else {
